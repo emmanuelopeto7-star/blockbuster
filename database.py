@@ -56,3 +56,32 @@ def initialize_db():
 if __name__ == "__main__":
     initialize_db()
     print(f"Initialized {DB_NAME} with movies, customers, and rentals tables")
+
+def seed_data():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELLECT COUNT (* FROM users")
+    if cursor.fetchone()[0] ==0:
+        cursor.executemany('''
+            INSERT INTO users (name, email, cash_balance, role) VALUES (?, ?, ?, ?)
+        ''', [
+            ('Main Admin', 'admin@blockbuster.com', 0.0, 'Admin'),
+            ('Store Clerk', 'clerk@blockbuster.com', 0.0, 'Clerk'),            
+            ('John Doe', 'john@customer.com', 45.0, 'Customer')               
+        ])
+    cursor.executemany('''
+            INSERT INTO inventory (title, item_type, available_copies) VALUES (?, ?, ?)
+        ''', [
+            ('The Matrix VHS', 'VHS', 2),
+            ('Interstellar CD', 'CD', 4),
+            ('Sony DVD Player', 'Equipment', 2)
+        ])     
+
+    conn.commit()
+    conn.close()
+    print("Database schema complete and sample records seeded")
+
+if __name__=="__main__":
+    initialize_db()
+    seed_data()       
+        
