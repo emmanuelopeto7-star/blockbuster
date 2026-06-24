@@ -57,6 +57,15 @@ def process_return(rental_id, item_id):
 
     return True, "Item returned safely"
 
+def clerk_approve_rental(rental_id):
+    """Clerk updates a customer's rental request status from 'Pending' to 'Approved'."""
+    conn=sqlite3.connect(DB_NAME)
+    cursor=conn.cursor()
+    cursor.execute("UPDATE rentals SET status = 'Approved' WHERE rental_id = ?", (rental_id,))
+    conn.commit()
+    conn.close()
+    return True, "Rental request has been approved."
+
 
 
 
