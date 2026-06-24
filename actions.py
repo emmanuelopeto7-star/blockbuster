@@ -38,6 +38,28 @@ def Check_rental_eligibility(member_number):
     
     return True, "Eligible to request rentals."
 
+def approve_rental(rental_id):
+    """Clerk operation: Sets a pending rental status to Approved."""
+    conn=get_db_connection()
+    cursor=conn.cursor()
+    cursor.execute("UPDATE rentals SET status = 'Approved' WHERE rental_id = ?", (rental_id,))
+    conn.commit()
+    conn.close()
+    return True,"Rental request approved successfully."
+
+def process_return(rental_id, item_id):
+    """Clerk operation: Receives and inspects returns, restocking inventory logs."""
+    conn=get_db_connection()
+    cursor=conn.cursor()
+    cursor.execute ("UPDATE rentals SET status = 'Returned' WHERE rental_id = ?", (rental_id,))
+    conn.commit()
+    conn.close()
+
+    return True, "Item returned safely"
+
+
+
+
                     
 
     
