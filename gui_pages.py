@@ -4,10 +4,12 @@ from tkinter import ttk
 from actions import (
     authenticate_user,
     get_available_inventory,
+    add_inventory_item,
     request_rental,
     get_rental_history,
     get_pending_rentals,
     approve_rental,
+    deny_rental,
     get_active_rentals,
     process_return,
     get_all_rentals,
@@ -145,7 +147,11 @@ class ClerkDashboard(tk.Frame):
         self.pending_tree.heading("title", text="Item")
         self.pending_tree.heading("requested", text="Requested On")
         self.pending_tree.pack(fill="both", expand=True, side="top")
-        tk.Button(pending_frame, text="Approve Selected", command=self.approve_selected).pack(pady=5)
+
+        pending_buttons = tk.Frame(pending_frame)
+        pending_buttons.pack(pady=5)
+        tk.Button(pending_buttons, text="Approve Selected", command=self.approve_selected).pack(side="left", padx=5)
+        tk.Button(pending_buttons, text="Deny Selected", command=self.deny_selected).pack(side="left", padx=5)
 
         active_frame = tk.LabelFrame(self, text="Active Rentals (Process Return)")
         active_frame.pack(fill="both", expand=True, padx=20, pady=10)
@@ -160,13 +166,16 @@ class ClerkDashboard(tk.Frame):
         tk.Button(active_frame, text="Process Return", command=self.process_return_selected).pack(pady=5)
 
         self._active_item_ids = {}
+        self._pending_item_ids = {}
         self.refresh()
 
     def refresh(self):
         for row in self.pending_tree.get_children():
             self.pending_tree.delete(row)
-        for rental_id, customer, title, requested in get_pending_rentals():
+        self._pending_item_ids = {}
+        for rental_id, customer, title, requested, item_id in get_pending_rentals():
             self.pending_tree.insert("", "end", iid=str(rental_id), values=(customer, title, requested))
+            self._pending_item_ids[str(rental_id)] = item_id
 
         self._active_item_ids = {}
         for row in self.active_tree.get_children():
@@ -183,6 +192,19 @@ class ClerkDashboard(tk.Frame):
 
         rental_id = int(selected[0])
         success, message = approve_rental(rental_id)
+        self.status_label.config(text=message, fg="green" if success else "red")
+        if success:
+            self.refresh()
+
+    def deny_selected(self):
+        selected = self.pending_tree.selection()
+        if not selected:
+            self.status_label.config(text="Select a pending request to deny.", fg="red")
+            return
+
+        rental_id = int(selected[0])
+        item_id = self._pending_item_ids[selected[0]]
+        success, message = deny_rental(rental_id, item_id)
         self.status_label.config(text=message, fg="green" if success else "red")
         if success:
             self.refresh()
@@ -211,23 +233,62 @@ class AdminDashboard(tk.Frame):
         tk.Button(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
         tk.Button(header, text="Refresh", command=lambda: self.refresh()).pack(side="right", padx=5)
 
+        self.status_label = tk.Label(self, text="")
+        self.status_label.pack()
+
+        add_frame = tk.LabelFrame(self, text="Add New Movie / Equipment")
+        add_frame.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(add_frame, text="Title:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.new_title_entry = tk.Entry(add_frame, width=25)
+        self.new_title_entry.grid(row=0, column=1, padx=5, pady=8)
+
+        tk.Label(add_frame, text="Type:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.new_type_combo = ttk.Combobox(add_frame, values=["VHS", "DVD", "CD", "Equipment"], width=12)
+        self.new_type_combo.set("VHS")
+        self.new_type_combo.grid(row=0, column=3, padx=5, pady=8)
+
+        tk.Label(add_frame, text="Copies:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
+        self.new_copies_entry = tk.Entry(add_frame, width=5)
+        self.new_copies_entry.insert(0, "1")
+        self.new_copies_entry.grid(row=0, column=5, padx=5, pady=8)
+
+        tk.Button(add_frame, text="Add Item", command=self.add_item).grid(row=0, column=6, padx=10, pady=8)
+
+        inventory_frame = tk.LabelFrame(self, text="Current Inventory")
+        inventory_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        self.inventory_tree = ttk.Treeview(
+            inventory_frame, columns=("title", "type", "available"), show="headings", height=5
+        )
+        self.inventory_tree.heading("title", text="Title")
+        self.inventory_tree.heading("type", text="Type")
+        self.inventory_tree.heading("available", text="Available Copies")
+        self.inventory_tree.pack(fill="both", expand=True)
+
         overview_frame = tk.LabelFrame(self, text="All Rentals & Returns")
         overview_frame.pack(fill="both", expand=True, padx=20, pady=10)
         self.overview_tree = ttk.Treeview(
             overview_frame,
             columns=("customer", "title", "rented", "due", "returned", "status"),
             show="headings",
+            height=6,
         )
         for col, label in [
             ("customer", "Customer"), ("title", "Item"), ("rented", "Rented On"),
             ("due", "Due Date"), ("returned", "Returned On"), ("status", "Status"),
         ]:
             self.overview_tree.heading(col, text=label)
-        self.overview_tree.pack(fill="both", expand=True)
+        self.overview_tree.pack(fill="both", expand=True, side="top")
+        tk.Button(overview_frame, text="Approve Selected", command=self.approve_selected).pack(pady=5)
 
         self.refresh()
 
     def refresh(self):
+        for row in self.inventory_tree.get_children():
+            self.inventory_tree.delete(row)
+        for item_id, title, item_type, available in get_available_inventory():
+            self.inventory_tree.insert("", "end", iid=str(item_id), values=(title, item_type, available))
+
         for row in self.overview_tree.get_children():
             self.overview_tree.delete(row)
         for rental_id, customer, title, rented, due, returned, status in get_all_rentals():
@@ -235,6 +296,38 @@ class AdminDashboard(tk.Frame):
                 "", "end", iid=str(rental_id),
                 values=(customer, title, rented, due or "-", returned or "-", status),
             )
+
+    def add_item(self):
+        title = self.new_title_entry.get().strip()
+        item_type = self.new_type_combo.get().strip()
+        copies_text = self.new_copies_entry.get().strip()
+
+        if not title or not item_type:
+            self.status_label.config(text="Title and type are required.", fg="red")
+            return
+        if not copies_text.isdigit():
+            self.status_label.config(text="Copies must be a whole number.", fg="red")
+            return
+
+        success, message = add_inventory_item(title, item_type, int(copies_text))
+        self.status_label.config(text=message, fg="green" if success else "red")
+        if success:
+            self.new_title_entry.delete(0, "end")
+            self.new_copies_entry.delete(0, "end")
+            self.new_copies_entry.insert(0, "1")
+            self.refresh()
+
+    def approve_selected(self):
+        selected = self.overview_tree.selection()
+        if not selected:
+            self.status_label.config(text="Select a pending request to approve.", fg="red")
+            return
+
+        rental_id = int(selected[0])
+        success, message = approve_rental(rental_id)
+        self.status_label.config(text=message, fg="green" if success else "red")
+        if success:
+            self.refresh()
 
 
 

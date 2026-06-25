@@ -39,6 +39,19 @@ def get_available_inventory():
         return cursor.fetchall()
 
 
+def add_inventory_item(title, item_type, copies):
+    """Admin operation: Adds a new movie or piece of equipment to inventory."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO inventory (title, item_type, available_copies) VALUES (?, ?, ?)",
+            (title, item_type, copies),
+        )
+        conn.commit()
+
+        return True, f"Added '{title}' to inventory."
+
+
 def request_rental(member_number, item_id):
     """Customer operation: Requests a rental if eligible and the item is in stock."""
     eligible, reason = check_rental_eligibility(member_number)
@@ -124,7 +137,7 @@ def get_pending_rentals():
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT r.rental_id, u.name, i.title, r.rental_date
+            SELECT r.rental_id, u.name, i.title, r.rental_date, r.item_id
             FROM rentals r
             JOIN users u ON r.member_number = u.member_number
             JOIN inventory i ON r.item_id = i.item_id
@@ -148,6 +161,27 @@ def approve_rental(rental_id):
         if cursor.rowcount == 0:
             return False, "Rental not found or is not awaiting approval."
         return True, "Rental request approved successfully."
+
+
+def deny_rental(rental_id, item_id):
+    """Clerk operation: Sets a Pending rental's status to Denied and restocks the item."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE rentals SET status = 'Denied' WHERE rental_id = ? AND status = 'Pending'",
+            (rental_id,),
+        )
+        if cursor.rowcount == 0:
+            conn.commit()
+            return False, "Rental not found or is not awaiting approval."
+
+        cursor.execute(
+            "UPDATE inventory SET available_copies = available_copies + 1 WHERE item_id = ?",
+            (item_id,),
+        )
+        conn.commit()
+
+        return True, "Rental request denied."
 
 
 def get_active_rentals():
