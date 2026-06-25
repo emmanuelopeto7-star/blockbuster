@@ -1,7 +1,10 @@
 import sqlite3
 from contextlib import closing
+from datetime import date, timedelta
 
 DB_NAME = "blockbuster.db"
+
+RENTAL_PERIOD_DAYS = 7
 
 MIN_CASH_BALANCE = 100
 ACTIVE_RENTAL_STATUSES = ("Pending", "Approved", "Late")
@@ -26,6 +29,61 @@ def authenticate_user(email):
             return False, "No account found with that email.", None
 
         return True, "Login successful.", user
+
+
+def get_available_inventory():
+    """Returns all inventory items for display on the customer rental screen."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT item_id, title, item_type, available_copies FROM inventory ORDER BY title")
+        return cursor.fetchall()
+
+
+def request_rental(member_number, item_id):
+    """Customer operation: Requests a rental if eligible and the item is in stock."""
+    eligible, reason = check_rental_eligibility(member_number)
+    if not eligible:
+        return False, reason
+
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT available_copies FROM inventory WHERE item_id = ?", (item_id,))
+        item = cursor.fetchone()
+        if not item:
+            return False, "Item not found."
+        if item[0] <= 0:
+            return False, "No copies available for this item."
+
+        due_date = date.today() + timedelta(days=RENTAL_PERIOD_DAYS)
+        cursor.execute(
+            "INSERT INTO rentals (item_id, member_number, due_date, status) VALUES (?, ?, ?, 'Pending')",
+            (item_id, member_number, due_date.isoformat()),
+        )
+        cursor.execute(
+            "UPDATE inventory SET available_copies = available_copies - 1 WHERE item_id = ?",
+            (item_id,),
+        )
+        conn.commit()
+
+        return True, "Rental requested successfully."
+
+
+def get_rental_history(member_number):
+    """Returns a customer's own rental and return history, most recent first."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.rental_id, i.title, r.rental_date, r.due_date, r.return_date, r.status
+            FROM rentals r
+            JOIN inventory i ON r.item_id = i.item_id
+            WHERE r.member_number = ?
+            ORDER BY r.rental_date DESC
+            """,
+            (member_number,),
+        )
+        return cursor.fetchall()
 
 
 def check_rental_eligibility(member_number):
@@ -60,6 +118,23 @@ def check_rental_eligibility(member_number):
         return True, "Eligible to request rentals."
 
 
+def get_pending_rentals():
+    """Clerk operation: Lists all rentals awaiting approval, oldest first."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.rental_id, u.name, i.title, r.rental_date
+            FROM rentals r
+            JOIN users u ON r.member_number = u.member_number
+            JOIN inventory i ON r.item_id = i.item_id
+            WHERE r.status = 'Pending'
+            ORDER BY r.rental_date
+            """
+        )
+        return cursor.fetchall()
+
+
 def approve_rental(rental_id):
     """Clerk operation: Sets a Pending rental's status to Approved."""
     with closing(get_db_connection()) as conn:
@@ -73,6 +148,23 @@ def approve_rental(rental_id):
         if cursor.rowcount == 0:
             return False, "Rental not found or is not awaiting approval."
         return True, "Rental request approved successfully."
+
+
+def get_active_rentals():
+    """Clerk operation: Lists Approved/Late rentals that are out and awaiting return."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.rental_id, u.name, i.title, r.item_id, r.due_date, r.status
+            FROM rentals r
+            JOIN users u ON r.member_number = u.member_number
+            JOIN inventory i ON r.item_id = i.item_id
+            WHERE r.status IN ('Approved', 'Late')
+            ORDER BY r.due_date
+            """
+        )
+        return cursor.fetchall()
 
 
 def process_return(rental_id, item_id):
@@ -94,3 +186,19 @@ def process_return(rental_id, item_id):
         conn.commit()
 
         return True, "Item returned safely."
+
+
+def get_all_rentals():
+    """Admin operation: Store-wide rental and return history, most recent first."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT r.rental_id, u.name, i.title, r.rental_date, r.due_date, r.return_date, r.status
+            FROM rentals r
+            JOIN users u ON r.member_number = u.member_number
+            JOIN inventory i ON r.item_id = i.item_id
+            ORDER BY r.rental_date DESC
+            """
+        )
+        return cursor.fetchall()
