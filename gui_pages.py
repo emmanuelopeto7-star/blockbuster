@@ -5,6 +5,7 @@ from actions import (
     authenticate_user,
     get_available_inventory,
     add_inventory_item,
+    add_member,
     request_rental,
     get_rental_history,
     get_pending_rentals,
@@ -138,6 +139,24 @@ class ClerkDashboard(tk.Frame):
         self.status_label = tk.Label(self, text="")
         self.status_label.pack()
 
+        member_frame = tk.LabelFrame(self, text="Register New Member")
+        member_frame.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.new_member_name_entry = tk.Entry(member_frame, width=20)
+        self.new_member_name_entry.grid(row=0, column=1, padx=5, pady=8)
+
+        tk.Label(member_frame, text="Email:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.new_member_email_entry = tk.Entry(member_frame, width=25)
+        self.new_member_email_entry.grid(row=0, column=3, padx=5, pady=8)
+
+        tk.Label(member_frame, text="Starting Balance:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
+        self.new_member_balance_entry = tk.Entry(member_frame, width=8)
+        self.new_member_balance_entry.insert(0, "0")
+        self.new_member_balance_entry.grid(row=0, column=5, padx=5, pady=8)
+
+        tk.Button(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=6, padx=10, pady=8)
+
         pending_frame = tk.LabelFrame(self, text="Pending Rental Requests")
         pending_frame.pack(fill="both", expand=True, padx=20, pady=10)
         self.pending_tree = ttk.Treeview(
@@ -183,6 +202,28 @@ class ClerkDashboard(tk.Frame):
         for rental_id, customer, title, item_id, due, status in get_active_rentals():
             self.active_tree.insert("", "end", iid=str(rental_id), values=(customer, title, due, status))
             self._active_item_ids[str(rental_id)] = item_id
+
+    def add_member(self):
+        name = self.new_member_name_entry.get().strip()
+        email = self.new_member_email_entry.get().strip()
+        balance_text = self.new_member_balance_entry.get().strip()
+
+        if not name or not email:
+            self.status_label.config(text="Name and email are required.", fg="red")
+            return
+        try:
+            balance = float(balance_text)
+        except ValueError:
+            self.status_label.config(text="Starting balance must be a number.", fg="red")
+            return
+
+        success, message = add_member(name, email, balance, "Customer")
+        self.status_label.config(text=message, fg="green" if success else "red")
+        if success:
+            self.new_member_name_entry.delete(0, "end")
+            self.new_member_email_entry.delete(0, "end")
+            self.new_member_balance_entry.delete(0, "end")
+            self.new_member_balance_entry.insert(0, "0")
 
     def approve_selected(self):
         selected = self.pending_tree.selection()
@@ -255,6 +296,29 @@ class AdminDashboard(tk.Frame):
 
         tk.Button(add_frame, text="Add Item", command=self.add_item).grid(row=0, column=6, padx=10, pady=8)
 
+        member_frame = tk.LabelFrame(self, text="Register New Member")
+        member_frame.pack(fill="x", padx=20, pady=10)
+
+        tk.Label(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.new_member_name_entry = tk.Entry(member_frame, width=20)
+        self.new_member_name_entry.grid(row=0, column=1, padx=5, pady=8)
+
+        tk.Label(member_frame, text="Email:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.new_member_email_entry = tk.Entry(member_frame, width=25)
+        self.new_member_email_entry.grid(row=0, column=3, padx=5, pady=8)
+
+        tk.Label(member_frame, text="Balance:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
+        self.new_member_balance_entry = tk.Entry(member_frame, width=8)
+        self.new_member_balance_entry.insert(0, "0")
+        self.new_member_balance_entry.grid(row=0, column=5, padx=5, pady=8)
+
+        tk.Label(member_frame, text="Role:").grid(row=0, column=6, padx=5, pady=8, sticky="e")
+        self.new_member_role_combo = ttk.Combobox(member_frame, values=["Customer", "Clerk", "Admin"], width=10)
+        self.new_member_role_combo.set("Customer")
+        self.new_member_role_combo.grid(row=0, column=7, padx=5, pady=8)
+
+        tk.Button(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=8, padx=10, pady=8)
+
         inventory_frame = tk.LabelFrame(self, text="Current Inventory")
         inventory_frame.pack(fill="both", expand=True, padx=20, pady=10)
         self.inventory_tree = ttk.Treeview(
@@ -316,6 +380,30 @@ class AdminDashboard(tk.Frame):
             self.new_copies_entry.delete(0, "end")
             self.new_copies_entry.insert(0, "1")
             self.refresh()
+
+    def add_member(self):
+        name = self.new_member_name_entry.get().strip()
+        email = self.new_member_email_entry.get().strip()
+        balance_text = self.new_member_balance_entry.get().strip()
+        role = self.new_member_role_combo.get().strip()
+
+        if not name or not email or not role:
+            self.status_label.config(text="Name, email, and role are required.", fg="red")
+            return
+        try:
+            balance = float(balance_text)
+        except ValueError:
+            self.status_label.config(text="Balance must be a number.", fg="red")
+            return
+
+        success, message = add_member(name, email, balance, role)
+        self.status_label.config(text=message, fg="green" if success else "red")
+        if success:
+            self.new_member_name_entry.delete(0, "end")
+            self.new_member_email_entry.delete(0, "end")
+            self.new_member_balance_entry.delete(0, "end")
+            self.new_member_balance_entry.insert(0, "0")
+            self.new_member_role_combo.set("Customer")
 
     def approve_selected(self):
         selected = self.overview_tree.selection()

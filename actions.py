@@ -52,6 +52,22 @@ def add_inventory_item(title, item_type, copies):
         return True, f"Added '{title}' to inventory."
 
 
+def add_member(name, email, cash_balance=0.0, role="Customer"):
+    """Admin/Clerk operation: Registers a new member account."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO users (name, email, cash_balance, role) VALUES (?, ?, ?, ?)",
+                (name, email, cash_balance, role),
+            )
+        except sqlite3.IntegrityError:
+            return False, f"A member with email '{email}' already exists."
+        conn.commit()
+
+        return True, f"Member '{name}' registered successfully."
+
+
 def request_rental(member_number, item_id):
     """Customer operation: Requests a rental if eligible and the item is in stock."""
     eligible, reason = check_rental_eligibility(member_number)
