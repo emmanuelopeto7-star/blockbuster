@@ -1,5 +1,6 @@
-import tkinter as tk
 from tkinter import ttk
+
+import customtkinter as ctk
 
 from actions import (
     authenticate_user,
@@ -16,33 +17,68 @@ from actions import (
     get_all_rentals,
 )
 
-class LoginScreen(tk.Frame):
+
+def configure_treeview_style():
+    """Restyles ttk.Treeview (no CTk equivalent) to match the CustomTkinter dark theme."""
+    style = ttk.Style()
+    style.theme_use("default")
+    style.configure(
+        "Treeview",
+        background="#2a2d2e",
+        foreground="white",
+        fieldbackground="#2a2d2e",
+        bordercolor="#2a2d2e",
+        borderwidth=0,
+        rowheight=26,
+    )
+    style.map("Treeview", background=[("selected", "#1f6aa5")])
+    style.configure(
+        "Treeview.Heading",
+        background="#1f1f1f",
+        foreground="white",
+        relief="flat",
+        borderwidth=0,
+    )
+    style.map("Treeview.Heading", background=[("active", "#1f1f1f")])
+
+
+def create_section(parent, title, fill="x", expand=False):
+    """Builds a titled CTkFrame section to stand in for tkinter's LabelFrame and returns its content area."""
+    section = ctk.CTkFrame(parent)
+    section.pack(fill=fill, expand=expand, padx=20, pady=10)
+    ctk.CTkLabel(section, text=title, font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", padx=12, pady=(10, 0))
+    content = ctk.CTkFrame(section, fg_color="transparent")
+    content.pack(fill="both", expand=True, padx=10, pady=(4, 10))
+    return content
+
+
+class LoginScreen(ctk.CTkFrame):
     def __init__(self, parent, controller):
         super().__init__(parent)
-        self.controller=controller
+        self.controller = controller
 
-        tk.Label(self, text="Blockbuster Login", font=("Arial", 16)).pack(pady=20)
+        ctk.CTkLabel(self, text="Blockbuster Login", font=ctk.CTkFont(size=22, weight="bold")).pack(pady=20)
 
-        tk.Label(self, text="Email:").pack()
-        self.email_entry = tk.Entry(self, width=30)
+        ctk.CTkLabel(self, text="Email:").pack()
+        self.email_entry = ctk.CTkEntry(self, width=220)
         self.email_entry.pack(pady=5)
         self.email_entry.bind("<Return>", lambda event: self.attempt_login())
         self.email_entry.focus_set()
 
-        self.error_label = tk.Label(self, text="", fg="red")
+        self.error_label = ctk.CTkLabel(self, text="", text_color="red")
         self.error_label.pack(pady=5)
 
-        tk.Button(self, text="Login", command=self.attempt_login).pack(pady=10)
+        ctk.CTkButton(self, text="Login", command=self.attempt_login).pack(pady=10)
 
     def attempt_login(self):
         email = self.email_entry.get().strip()
         if not email:
-            self.error_label.config(text="Please enter an email.")
+            self.error_label.configure(text="Please enter an email.")
             return
 
         success, message, user_data = authenticate_user(email)
         if not success:
-            self.error_label.config(text=message)
+            self.error_label.configure(text=message)
             return
 
         role = user_data[4]
@@ -53,27 +89,27 @@ class LoginScreen(tk.Frame):
         }
         dashboard_class = dashboards.get(role)
         if not dashboard_class:
-            self.error_label.config(text=f"Unknown role: {role}")
+            self.error_label.configure(text=f"Unknown role: {role}")
             return
 
         self.controller.switch_frame(dashboard_class, self.controller, user_data)
 
-class CustomerDashboard(tk.Frame):
+
+class CustomerDashboard(ctk.CTkFrame):
     def __init__(self, parent, controller, user_data):
         super().__init__(parent)
-        self.controller=controller
+        self.controller = controller
         self.member_number = user_data[0]
 
-        header = tk.Frame(self)
+        header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", pady=10)
-        tk.Label(header, text=f"Welcome to your Dashboard, {user_data[1]}", font=("Arial", 16)).pack(side="left", padx=20)
-        tk.Button(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
+        ctk.CTkLabel(header, text=f"Welcome to your Dashboard, {user_data[1]}", font=ctk.CTkFont(size=18, weight="bold")).pack(side="left", padx=20)
+        ctk.CTkButton(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
 
-        self.status_label = tk.Label(self, text="")
+        self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
-        inventory_frame = tk.LabelFrame(self, text="Available Items")
-        inventory_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        inventory_frame = create_section(self, "Available Items", fill="both", expand=True)
         self.inventory_tree = ttk.Treeview(
             inventory_frame, columns=("title", "type", "available"), show="headings", height=6
         )
@@ -81,10 +117,9 @@ class CustomerDashboard(tk.Frame):
         self.inventory_tree.heading("type", text="Type")
         self.inventory_tree.heading("available", text="Available Copies")
         self.inventory_tree.pack(fill="both", expand=True, side="top")
-        tk.Button(inventory_frame, text="Rent Selected", command=self.rent_selected).pack(pady=5)
+        ctk.CTkButton(inventory_frame, text="Rent Selected", command=self.rent_selected).pack(pady=5)
 
-        history_frame = tk.LabelFrame(self, text="My Rental & Return History")
-        history_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        history_frame = create_section(self, "My Rental & Return History", fill="both", expand=True)
         self.history_tree = ttk.Treeview(
             history_frame,
             columns=("title", "rented", "due", "returned", "status"),
@@ -117,48 +152,47 @@ class CustomerDashboard(tk.Frame):
     def rent_selected(self):
         selected = self.inventory_tree.selection()
         if not selected:
-            self.status_label.config(text="Select an item to rent.", fg="red")
+            self.status_label.configure(text="Select an item to rent.", text_color="red")
             return
 
         item_id = int(selected[0])
         success, message = request_rental(self.member_number, item_id)
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.refresh()
 
-class ClerkDashboard(tk.Frame):
+
+class ClerkDashboard(ctk.CTkFrame):
     def __init__(self, parent, controller, user_data):
         super().__init__(parent)
-        self.controller=controller
+        self.controller = controller
 
-        header = tk.Frame(self)
+        header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", pady=10)
-        tk.Label(header, text="Store Clerk Operational Command Console", font=("Arial", 16)).pack(side="left", padx=20)
-        tk.Button(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
+        ctk.CTkLabel(header, text="Store Clerk Operational Command Console", font=ctk.CTkFont(size=18, weight="bold")).pack(side="left", padx=20)
+        ctk.CTkButton(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
 
-        self.status_label = tk.Label(self, text="")
+        self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
-        member_frame = tk.LabelFrame(self, text="Register New Member")
-        member_frame.pack(fill="x", padx=20, pady=10)
+        member_frame = create_section(self, "Register New Member")
 
-        tk.Label(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
-        self.new_member_name_entry = tk.Entry(member_frame, width=20)
+        ctk.CTkLabel(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.new_member_name_entry = ctk.CTkEntry(member_frame, width=160)
         self.new_member_name_entry.grid(row=0, column=1, padx=5, pady=8)
 
-        tk.Label(member_frame, text="Email:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
-        self.new_member_email_entry = tk.Entry(member_frame, width=25)
+        ctk.CTkLabel(member_frame, text="Email:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.new_member_email_entry = ctk.CTkEntry(member_frame, width=200)
         self.new_member_email_entry.grid(row=0, column=3, padx=5, pady=8)
 
-        tk.Label(member_frame, text="Starting Balance:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
-        self.new_member_balance_entry = tk.Entry(member_frame, width=8)
+        ctk.CTkLabel(member_frame, text="Starting Balance:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
+        self.new_member_balance_entry = ctk.CTkEntry(member_frame, width=80)
         self.new_member_balance_entry.insert(0, "0")
         self.new_member_balance_entry.grid(row=0, column=5, padx=5, pady=8)
 
-        tk.Button(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=6, padx=10, pady=8)
+        ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=6, padx=10, pady=8)
 
-        pending_frame = tk.LabelFrame(self, text="Pending Rental Requests")
-        pending_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        pending_frame = create_section(self, "Pending Rental Requests", fill="both", expand=True)
         self.pending_tree = ttk.Treeview(
             pending_frame, columns=("customer", "title", "requested"), show="headings", height=6
         )
@@ -167,13 +201,12 @@ class ClerkDashboard(tk.Frame):
         self.pending_tree.heading("requested", text="Requested On")
         self.pending_tree.pack(fill="both", expand=True, side="top")
 
-        pending_buttons = tk.Frame(pending_frame)
+        pending_buttons = ctk.CTkFrame(pending_frame, fg_color="transparent")
         pending_buttons.pack(pady=5)
-        tk.Button(pending_buttons, text="Approve Selected", command=self.approve_selected).pack(side="left", padx=5)
-        tk.Button(pending_buttons, text="Deny Selected", command=self.deny_selected).pack(side="left", padx=5)
+        ctk.CTkButton(pending_buttons, text="Approve Selected", command=self.approve_selected).pack(side="left", padx=5)
+        ctk.CTkButton(pending_buttons, text="Deny Selected", command=self.deny_selected).pack(side="left", padx=5)
 
-        active_frame = tk.LabelFrame(self, text="Active Rentals (Process Return)")
-        active_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        active_frame = create_section(self, "Active Rentals (Process Return)", fill="both", expand=True)
         self.active_tree = ttk.Treeview(
             active_frame, columns=("customer", "title", "due", "status"), show="headings", height=6
         )
@@ -182,7 +215,7 @@ class ClerkDashboard(tk.Frame):
         ]:
             self.active_tree.heading(col, text=label)
         self.active_tree.pack(fill="both", expand=True, side="top")
-        tk.Button(active_frame, text="Process Return", command=self.process_return_selected).pack(pady=5)
+        ctk.CTkButton(active_frame, text="Process Return", command=self.process_return_selected).pack(pady=5)
 
         self._active_item_ids = {}
         self._pending_item_ids = {}
@@ -209,16 +242,16 @@ class ClerkDashboard(tk.Frame):
         balance_text = self.new_member_balance_entry.get().strip()
 
         if not name or not email:
-            self.status_label.config(text="Name and email are required.", fg="red")
+            self.status_label.configure(text="Name and email are required.", text_color="red")
             return
         try:
             balance = float(balance_text)
         except ValueError:
-            self.status_label.config(text="Starting balance must be a number.", fg="red")
+            self.status_label.configure(text="Starting balance must be a number.", text_color="red")
             return
 
         success, message = add_member(name, email, balance, "Customer")
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.new_member_name_entry.delete(0, "end")
             self.new_member_email_entry.delete(0, "end")
@@ -228,99 +261,97 @@ class ClerkDashboard(tk.Frame):
     def approve_selected(self):
         selected = self.pending_tree.selection()
         if not selected:
-            self.status_label.config(text="Select a pending request to approve.", fg="red")
+            self.status_label.configure(text="Select a pending request to approve.", text_color="red")
             return
 
         rental_id = int(selected[0])
         success, message = approve_rental(rental_id)
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.refresh()
 
     def deny_selected(self):
         selected = self.pending_tree.selection()
         if not selected:
-            self.status_label.config(text="Select a pending request to deny.", fg="red")
+            self.status_label.configure(text="Select a pending request to deny.", text_color="red")
             return
 
         rental_id = int(selected[0])
         item_id = self._pending_item_ids[selected[0]]
         success, message = deny_rental(rental_id, item_id)
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.refresh()
 
     def process_return_selected(self):
         selected = self.active_tree.selection()
         if not selected:
-            self.status_label.config(text="Select a rental to process its return.", fg="red")
+            self.status_label.configure(text="Select a rental to process its return.", text_color="red")
             return
 
         rental_id = int(selected[0])
         item_id = self._active_item_ids[selected[0]]
         success, message = process_return(rental_id, item_id)
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.refresh()
 
-class AdminDashboard(tk.Frame):
+
+class AdminDashboard(ctk.CTkFrame):
     def __init__(self, parent, controller, user_data):
         super().__init__(parent)
-        self.controller=controller
+        self.controller = controller
 
-        header = tk.Frame(self)
+        header = ctk.CTkFrame(self, fg_color="transparent")
         header.pack(fill="x", pady=10)
-        tk.Label(header, text="Main Admin Master Analytics Panel", font=("Arial", 16)).pack(side="left", padx=20)
-        tk.Button(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
-        tk.Button(header, text="Refresh", command=lambda: self.refresh()).pack(side="right", padx=5)
+        ctk.CTkLabel(header, text="Main Admin Master Analytics Panel", font=ctk.CTkFont(size=18, weight="bold")).pack(side="left", padx=20)
+        ctk.CTkButton(header, text="Logout", command=lambda: self.controller.switch_frame(LoginScreen, self.controller)).pack(side="right", padx=20)
+        ctk.CTkButton(header, text="Refresh", command=lambda: self.refresh()).pack(side="right", padx=5)
 
-        self.status_label = tk.Label(self, text="")
+        self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
-        add_frame = tk.LabelFrame(self, text="Add New Movie / Equipment")
-        add_frame.pack(fill="x", padx=20, pady=10)
+        add_frame = create_section(self, "Add New Movie / Equipment")
 
-        tk.Label(add_frame, text="Title:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
-        self.new_title_entry = tk.Entry(add_frame, width=25)
+        ctk.CTkLabel(add_frame, text="Title:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.new_title_entry = ctk.CTkEntry(add_frame, width=180)
         self.new_title_entry.grid(row=0, column=1, padx=5, pady=8)
 
-        tk.Label(add_frame, text="Type:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
-        self.new_type_combo = ttk.Combobox(add_frame, values=["VHS", "DVD", "CD", "Equipment"], width=12)
+        ctk.CTkLabel(add_frame, text="Type:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.new_type_combo = ctk.CTkComboBox(add_frame, values=["VHS", "DVD", "CD", "Equipment"], width=110)
         self.new_type_combo.set("VHS")
         self.new_type_combo.grid(row=0, column=3, padx=5, pady=8)
 
-        tk.Label(add_frame, text="Copies:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
-        self.new_copies_entry = tk.Entry(add_frame, width=5)
+        ctk.CTkLabel(add_frame, text="Copies:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
+        self.new_copies_entry = ctk.CTkEntry(add_frame, width=60)
         self.new_copies_entry.insert(0, "1")
         self.new_copies_entry.grid(row=0, column=5, padx=5, pady=8)
 
-        tk.Button(add_frame, text="Add Item", command=self.add_item).grid(row=0, column=6, padx=10, pady=8)
+        ctk.CTkButton(add_frame, text="Add Item", command=self.add_item).grid(row=0, column=6, padx=10, pady=8)
 
-        member_frame = tk.LabelFrame(self, text="Register New Member")
-        member_frame.pack(fill="x", padx=20, pady=10)
+        member_frame = create_section(self, "Register New Member")
 
-        tk.Label(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
-        self.new_member_name_entry = tk.Entry(member_frame, width=20)
+        ctk.CTkLabel(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.new_member_name_entry = ctk.CTkEntry(member_frame, width=160)
         self.new_member_name_entry.grid(row=0, column=1, padx=5, pady=8)
 
-        tk.Label(member_frame, text="Email:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
-        self.new_member_email_entry = tk.Entry(member_frame, width=25)
+        ctk.CTkLabel(member_frame, text="Email:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.new_member_email_entry = ctk.CTkEntry(member_frame, width=200)
         self.new_member_email_entry.grid(row=0, column=3, padx=5, pady=8)
 
-        tk.Label(member_frame, text="Balance:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
-        self.new_member_balance_entry = tk.Entry(member_frame, width=8)
+        ctk.CTkLabel(member_frame, text="Balance:").grid(row=0, column=4, padx=5, pady=8, sticky="e")
+        self.new_member_balance_entry = ctk.CTkEntry(member_frame, width=80)
         self.new_member_balance_entry.insert(0, "0")
         self.new_member_balance_entry.grid(row=0, column=5, padx=5, pady=8)
 
-        tk.Label(member_frame, text="Role:").grid(row=0, column=6, padx=5, pady=8, sticky="e")
-        self.new_member_role_combo = ttk.Combobox(member_frame, values=["Customer", "Clerk", "Admin"], width=10)
+        ctk.CTkLabel(member_frame, text="Role:").grid(row=0, column=6, padx=5, pady=8, sticky="e")
+        self.new_member_role_combo = ctk.CTkComboBox(member_frame, values=["Customer", "Clerk", "Admin"], width=100)
         self.new_member_role_combo.set("Customer")
         self.new_member_role_combo.grid(row=0, column=7, padx=5, pady=8)
 
-        tk.Button(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=8, padx=10, pady=8)
+        ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=8, padx=10, pady=8)
 
-        inventory_frame = tk.LabelFrame(self, text="Current Inventory")
-        inventory_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        inventory_frame = create_section(self, "Current Inventory", fill="both", expand=True)
         self.inventory_tree = ttk.Treeview(
             inventory_frame, columns=("title", "type", "available"), show="headings", height=5
         )
@@ -329,8 +360,7 @@ class AdminDashboard(tk.Frame):
         self.inventory_tree.heading("available", text="Available Copies")
         self.inventory_tree.pack(fill="both", expand=True)
 
-        overview_frame = tk.LabelFrame(self, text="All Rentals & Returns")
-        overview_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        overview_frame = create_section(self, "All Rentals & Returns", fill="both", expand=True)
         self.overview_tree = ttk.Treeview(
             overview_frame,
             columns=("customer", "title", "rented", "due", "returned", "status"),
@@ -343,7 +373,7 @@ class AdminDashboard(tk.Frame):
         ]:
             self.overview_tree.heading(col, text=label)
         self.overview_tree.pack(fill="both", expand=True, side="top")
-        tk.Button(overview_frame, text="Approve Selected", command=self.approve_selected).pack(pady=5)
+        ctk.CTkButton(overview_frame, text="Approve Selected", command=self.approve_selected).pack(pady=5)
 
         self.refresh()
 
@@ -367,14 +397,14 @@ class AdminDashboard(tk.Frame):
         copies_text = self.new_copies_entry.get().strip()
 
         if not title or not item_type:
-            self.status_label.config(text="Title and type are required.", fg="red")
+            self.status_label.configure(text="Title and type are required.", text_color="red")
             return
         if not copies_text.isdigit():
-            self.status_label.config(text="Copies must be a whole number.", fg="red")
+            self.status_label.configure(text="Copies must be a whole number.", text_color="red")
             return
 
         success, message = add_inventory_item(title, item_type, int(copies_text))
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.new_title_entry.delete(0, "end")
             self.new_copies_entry.delete(0, "end")
@@ -388,16 +418,16 @@ class AdminDashboard(tk.Frame):
         role = self.new_member_role_combo.get().strip()
 
         if not name or not email or not role:
-            self.status_label.config(text="Name, email, and role are required.", fg="red")
+            self.status_label.configure(text="Name, email, and role are required.", text_color="red")
             return
         try:
             balance = float(balance_text)
         except ValueError:
-            self.status_label.config(text="Balance must be a number.", fg="red")
+            self.status_label.configure(text="Balance must be a number.", text_color="red")
             return
 
         success, message = add_member(name, email, balance, role)
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.new_member_name_entry.delete(0, "end")
             self.new_member_email_entry.delete(0, "end")
@@ -408,14 +438,11 @@ class AdminDashboard(tk.Frame):
     def approve_selected(self):
         selected = self.overview_tree.selection()
         if not selected:
-            self.status_label.config(text="Select a pending request to approve.", fg="red")
+            self.status_label.configure(text="Select a pending request to approve.", text_color="red")
             return
 
         rental_id = int(selected[0])
         success, message = approve_rental(rental_id)
-        self.status_label.config(text=message, fg="green" if success else "red")
+        self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.refresh()
-
-
-

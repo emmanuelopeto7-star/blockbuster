@@ -1,13 +1,17 @@
-import tkinter as tk
+import customtkinter as ctk
 
-from gui_pages import LoginScreen
+from gui_pages import LoginScreen, configure_treeview_style
 
-class BlockbusterApp(tk.Tk):
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+class BlockbusterApp(ctk.CTk):
     def __init__(self):
-        super(). __init__()
+        super().__init__()
         self.title("Modern Blockbuster System")
         self.geometry("900x600")
         self.current_frame = None
+        configure_treeview_style()
         self.switch_frame(LoginScreen, self)
 
     def switch_frame(self, frame_class, *args):
