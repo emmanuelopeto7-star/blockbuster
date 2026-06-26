@@ -16,6 +16,17 @@ def get_db_connection():
     return conn
 
 
+def update_late_rentals():
+    """Flips Approved rentals past their due date to Late."""
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE rentals SET status = 'Late' WHERE status = 'Approved' AND due_date < ?",
+            (date.today().isoformat(),),
+        )
+        conn.commit()
+
+
 def authenticate_user(email):
     """Looks up a member by email for login and returns their role-routing data."""
     with closing(get_db_connection()) as conn:
@@ -100,6 +111,7 @@ def request_rental(member_number, item_id):
 
 def get_rental_history(member_number):
     """Returns a customer's own rental and return history, most recent first."""
+    update_late_rentals()
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -202,6 +214,7 @@ def deny_rental(rental_id, item_id):
 
 def get_active_rentals():
     """Clerk operation: Lists Approved/Late rentals that are out and awaiting return."""
+    update_late_rentals()
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -240,6 +253,7 @@ def process_return(rental_id, item_id):
 
 def get_all_rentals():
     """Admin operation: Store-wide rental and return history, most recent first."""
+    update_late_rentals()
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(

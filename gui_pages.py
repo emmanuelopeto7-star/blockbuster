@@ -109,7 +109,10 @@ class CustomerDashboard(ctk.CTkFrame):
         self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
-        inventory_frame = create_section(self, "Available Items", fill="both", expand=True)
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True)
+
+        inventory_frame = create_section(body, "Available Items", fill="both", expand=True)
         self.inventory_tree = ttk.Treeview(
             inventory_frame, columns=("title", "type", "available"), show="headings", height=6
         )
@@ -119,7 +122,7 @@ class CustomerDashboard(ctk.CTkFrame):
         self.inventory_tree.pack(fill="both", expand=True, side="top")
         ctk.CTkButton(inventory_frame, text="Rent Selected", command=self.rent_selected).pack(pady=5)
 
-        history_frame = create_section(self, "My Rental & Return History", fill="both", expand=True)
+        history_frame = create_section(body, "My Rental & Return History", fill="both", expand=True)
         self.history_tree = ttk.Treeview(
             history_frame,
             columns=("title", "rented", "due", "returned", "status"),
@@ -175,7 +178,10 @@ class ClerkDashboard(ctk.CTkFrame):
         self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
-        member_frame = create_section(self, "Register New Member")
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True)
+
+        member_frame = create_section(body, "Register New Member")
 
         ctk.CTkLabel(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
         self.new_member_name_entry = ctk.CTkEntry(member_frame, width=160)
@@ -192,7 +198,7 @@ class ClerkDashboard(ctk.CTkFrame):
 
         ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=6, padx=10, pady=8)
 
-        pending_frame = create_section(self, "Pending Rental Requests", fill="both", expand=True)
+        pending_frame = create_section(body, "Pending Rental Requests", fill="both", expand=True)
         self.pending_tree = ttk.Treeview(
             pending_frame, columns=("customer", "title", "requested"), show="headings", height=6
         )
@@ -206,7 +212,7 @@ class ClerkDashboard(ctk.CTkFrame):
         ctk.CTkButton(pending_buttons, text="Approve Selected", command=self.approve_selected).pack(side="left", padx=5)
         ctk.CTkButton(pending_buttons, text="Deny Selected", command=self.deny_selected).pack(side="left", padx=5)
 
-        active_frame = create_section(self, "Active Rentals (Process Return)", fill="both", expand=True)
+        active_frame = create_section(body, "Active Rentals (Process Return)", fill="both", expand=True)
         self.active_tree = ttk.Treeview(
             active_frame, columns=("customer", "title", "due", "status"), show="headings", height=6
         )
@@ -311,7 +317,10 @@ class AdminDashboard(ctk.CTkFrame):
         self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
-        add_frame = create_section(self, "Add New Movie / Equipment")
+        body = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        body.pack(fill="both", expand=True)
+
+        add_frame = create_section(body, "Add New Movie / Equipment")
 
         ctk.CTkLabel(add_frame, text="Title:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
         self.new_title_entry = ctk.CTkEntry(add_frame, width=180)
@@ -329,7 +338,7 @@ class AdminDashboard(ctk.CTkFrame):
 
         ctk.CTkButton(add_frame, text="Add Item", command=self.add_item).grid(row=0, column=6, padx=10, pady=8)
 
-        member_frame = create_section(self, "Register New Member")
+        member_frame = create_section(body, "Register New Member")
 
         ctk.CTkLabel(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
         self.new_member_name_entry = ctk.CTkEntry(member_frame, width=160)
@@ -351,7 +360,7 @@ class AdminDashboard(ctk.CTkFrame):
 
         ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=8, padx=10, pady=8)
 
-        inventory_frame = create_section(self, "Current Inventory", fill="both", expand=True)
+        inventory_frame = create_section(body, "Current Inventory", fill="both", expand=True)
         self.inventory_tree = ttk.Treeview(
             inventory_frame, columns=("title", "type", "available"), show="headings", height=5
         )
@@ -360,7 +369,7 @@ class AdminDashboard(ctk.CTkFrame):
         self.inventory_tree.heading("available", text="Available Copies")
         self.inventory_tree.pack(fill="both", expand=True)
 
-        overview_frame = create_section(self, "All Rentals & Returns", fill="both", expand=True)
+        overview_frame = create_section(body, "All Rentals & Returns", fill="both", expand=True)
         self.overview_tree = ttk.Treeview(
             overview_frame,
             columns=("customer", "title", "rented", "due", "returned", "status"),
