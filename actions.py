@@ -27,8 +27,17 @@ def update_late_rentals():
         conn.commit()
 
 
-def authenticate_user(email):
-    """Looks up a member by email for login and returns their role-routing data."""
+ROLE_PASSWORDS = {
+    "Clerk": "Clerk6969",
+    "Admin": "admin6767",
+}
+
+
+def authenticate_user(email, password=None):
+    """Looks up a member by email for login and returns their role-routing data.
+
+    Clerk and Admin roles additionally require their fixed role password.
+    """
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -38,6 +47,11 @@ def authenticate_user(email):
         user = cursor.fetchone()
         if not user:
             return False, "No account found with that email.", None
+
+        role = user[4]
+        required_password = ROLE_PASSWORDS.get(role)
+        if required_password and password != required_password:
+            return False, "Incorrect password.", None
 
         return True, "Login successful.", user
 

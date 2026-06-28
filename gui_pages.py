@@ -57,13 +57,29 @@ class LoginScreen(ctk.CTkFrame):
         super().__init__(parent)
         self.controller = controller
 
-        ctk.CTkLabel(self, text="Blockbuster Login", font=ctk.CTkFont(size=22, weight="bold")).pack(pady=20)
+        ctk.CTkLabel(self, text="Blockbuster Login", font=ctk.CTkFont(size=22, weight="bold")).pack(pady=(20, 5))
+
+        ctk.CTkLabel(
+            self,
+            text=(
+                "Every title on our shelves is offered strictly as a rental,\n"
+                "kept in circulation to help preserve the heritage of physical media."
+            ),
+            font=ctk.CTkFont(size=12),
+            text_color="gray70",
+            justify="center",
+        ).pack(pady=(0, 15))
 
         ctk.CTkLabel(self, text="Email:").pack()
         self.email_entry = ctk.CTkEntry(self, width=220)
         self.email_entry.pack(pady=5)
         self.email_entry.bind("<Return>", lambda event: self.attempt_login())
         self.email_entry.focus_set()
+
+        ctk.CTkLabel(self, text="Password:").pack()
+        self.password_entry = ctk.CTkEntry(self, width=220, show="*", placeholder_text="Clerk/Admin only")
+        self.password_entry.pack(pady=5)
+        self.password_entry.bind("<Return>", lambda event: self.attempt_login())
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="red")
         self.error_label.pack(pady=5)
@@ -72,11 +88,12 @@ class LoginScreen(ctk.CTkFrame):
 
     def attempt_login(self):
         email = self.email_entry.get().strip()
+        password = self.password_entry.get()
         if not email:
             self.error_label.configure(text="Please enter an email.")
             return
 
-        success, message, user_data = authenticate_user(email)
+        success, message, user_data = authenticate_user(email, password)
         if not success:
             self.error_label.configure(text=message)
             return
