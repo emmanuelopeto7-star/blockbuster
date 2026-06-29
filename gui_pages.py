@@ -134,6 +134,24 @@ class CustomerDashboard(ctk.CTkFrame):
         self.status_label = ctk.CTkLabel(self, text="")
         self.status_label.pack()
 
+        # Short onboarding tutorial, kept visible permanently.
+        self.tutorial_frame = ctk.CTkFrame(self)
+        self.tutorial_frame.pack(fill="x", padx=20, pady=(0, 10))
+        ctk.CTkLabel(
+            self.tutorial_frame, text="Quick Start", font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", padx=12, pady=(10, 2))
+        ctk.CTkLabel(
+            self.tutorial_frame,
+            text=(
+                "1. Browse \"Available Items\" below and select a title.\n"
+                "2. Click \"Rent Selected\" to request a rental.\n"
+                "3. A clerk will review and approve your request.\n"
+                "4. Track due dates and returns in \"My Rental & Return History\" below."
+            ),
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", padx=12, pady=(0, 10))
+
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True)
 

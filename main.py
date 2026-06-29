@@ -23,7 +23,6 @@ class BlockbusterApp(ctk.CTk):
         self.switch_frame(LoginScreen, self)
 
     def switch_frame(self, frame_class, *args):
-        """Tears down the current screen and replaces it with a new one (e.g. Login -> Dashboard)."""
         if self.current_frame:
             self.current_frame.destroy()
         self.current_frame=frame_class(self, *args)

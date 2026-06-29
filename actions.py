@@ -118,9 +118,6 @@ def add_member(name, email, cash_balance=0.0, role="Customer", password=""):
 
 def set_member_password(email, new_password):
     """Clerk/Admin operation: Sets or resets a member's login password.
-
-    Only affects Customer logins; Clerk and Admin accounts always use
-    their fixed role password regardless of what's stored here.
     """
     if not new_password:
         return False, "New password is required."
