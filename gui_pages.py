@@ -7,6 +7,7 @@ from actions import (
     get_available_inventory,
     add_inventory_item,
     add_member,
+    set_member_password,
     request_rental,
     get_rental_history,
     get_pending_rentals,
@@ -53,6 +54,9 @@ def create_section(parent, title, fill="x", expand=False):
 
 
 class LoginScreen(ctk.CTkFrame):
+    """First screen shown on launch. Authenticates the user and routes them
+    to the dashboard that matches their role (Customer/Clerk/Admin)."""
+
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
@@ -77,7 +81,7 @@ class LoginScreen(ctk.CTkFrame):
         self.email_entry.focus_set()
 
         ctk.CTkLabel(self, text="Password:").pack()
-        self.password_entry = ctk.CTkEntry(self, width=220, show="*", placeholder_text="Clerk/Admin only")
+        self.password_entry = ctk.CTkEntry(self, width=220, show="*")
         self.password_entry.pack(pady=5)
         self.password_entry.bind("<Return>", lambda event: self.attempt_login())
 
@@ -98,6 +102,7 @@ class LoginScreen(ctk.CTkFrame):
             self.error_label.configure(text=message)
             return
 
+        # Route to the correct dashboard based on the account's role.
         role = user_data[4]
         dashboards = {
             "Customer": CustomerDashboard,
@@ -113,6 +118,9 @@ class LoginScreen(ctk.CTkFrame):
 
 
 class CustomerDashboard(ctk.CTkFrame):
+    """Customer-facing screen: browse available inventory, rent an item, and
+    review your own rental/return history."""
+
     def __init__(self, parent, controller, user_data):
         super().__init__(parent)
         self.controller = controller
@@ -129,6 +137,7 @@ class CustomerDashboard(ctk.CTkFrame):
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True)
 
+        # Available items table, with a button to rent whatever row is selected.
         inventory_frame = create_section(body, "Available Items", fill="both", expand=True)
         self.inventory_tree = ttk.Treeview(
             inventory_frame, columns=("title", "type", "available"), show="headings", height=6
@@ -139,6 +148,7 @@ class CustomerDashboard(ctk.CTkFrame):
         self.inventory_tree.pack(fill="both", expand=True, side="top")
         ctk.CTkButton(inventory_frame, text="Rent Selected", command=self.rent_selected).pack(pady=5)
 
+        # Read-only history of this customer's own rentals and returns.
         history_frame = create_section(body, "My Rental & Return History", fill="both", expand=True)
         self.history_tree = ttk.Treeview(
             history_frame,
@@ -156,9 +166,11 @@ class CustomerDashboard(ctk.CTkFrame):
         self.refresh()
 
     def refresh(self):
+        """Reloads both tables from the database, replacing all rows currently shown."""
         for row in self.inventory_tree.get_children():
             self.inventory_tree.delete(row)
         for item_id, title, item_type, available in get_available_inventory():
+            # Treeview iid is set to the item_id so we can map a selection back to a row's primary key.
             self.inventory_tree.insert("", "end", iid=str(item_id), values=(title, item_type, available))
 
         for row in self.history_tree.get_children():
@@ -183,6 +195,9 @@ class CustomerDashboard(ctk.CTkFrame):
 
 
 class ClerkDashboard(ctk.CTkFrame):
+    """Clerk-facing screen: day-to-day store operations - register members,
+    reset customer passwords, approve/deny rental requests, and process returns."""
+
     def __init__(self, parent, controller, user_data):
         super().__init__(parent)
         self.controller = controller
@@ -198,6 +213,7 @@ class ClerkDashboard(ctk.CTkFrame):
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True)
 
+        # --- Register New Member form ---
         member_frame = create_section(body, "Register New Member")
 
         ctk.CTkLabel(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
@@ -213,8 +229,26 @@ class ClerkDashboard(ctk.CTkFrame):
         self.new_member_balance_entry.insert(0, "0")
         self.new_member_balance_entry.grid(row=0, column=5, padx=5, pady=8)
 
-        ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=6, padx=10, pady=8)
+        ctk.CTkLabel(member_frame, text="Password:").grid(row=0, column=6, padx=5, pady=8, sticky="e")
+        self.new_member_password_entry = ctk.CTkEntry(member_frame, width=140, show="*")
+        self.new_member_password_entry.grid(row=0, column=7, padx=5, pady=8)
 
+        ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=8, padx=10, pady=8)
+
+        # --- Reset Customer Password form ---
+        password_frame = create_section(body, "Reset Customer Password")
+
+        ctk.CTkLabel(password_frame, text="Email:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.reset_password_email_entry = ctk.CTkEntry(password_frame, width=200)
+        self.reset_password_email_entry.grid(row=0, column=1, padx=5, pady=8)
+
+        ctk.CTkLabel(password_frame, text="New Password:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.reset_password_entry = ctk.CTkEntry(password_frame, width=140, show="*")
+        self.reset_password_entry.grid(row=0, column=3, padx=5, pady=8)
+
+        ctk.CTkButton(password_frame, text="Set Password", command=self.reset_password).grid(row=0, column=4, padx=10, pady=8)
+
+        # --- Pending rental requests, awaiting approve/deny ---
         pending_frame = create_section(body, "Pending Rental Requests", fill="both", expand=True)
         self.pending_tree = ttk.Treeview(
             pending_frame, columns=("customer", "title", "requested"), show="headings", height=6
@@ -229,6 +263,7 @@ class ClerkDashboard(ctk.CTkFrame):
         ctk.CTkButton(pending_buttons, text="Approve Selected", command=self.approve_selected).pack(side="left", padx=5)
         ctk.CTkButton(pending_buttons, text="Deny Selected", command=self.deny_selected).pack(side="left", padx=5)
 
+        # --- Active (approved/late) rentals, awaiting return ---
         active_frame = create_section(body, "Active Rentals (Process Return)", fill="both", expand=True)
         self.active_tree = ttk.Treeview(
             active_frame, columns=("customer", "title", "due", "status"), show="headings", height=6
@@ -240,11 +275,14 @@ class ClerkDashboard(ctk.CTkFrame):
         self.active_tree.pack(fill="both", expand=True, side="top")
         ctk.CTkButton(active_frame, text="Process Return", command=self.process_return_selected).pack(pady=5)
 
+        # Treeview rows only store what's shown on screen, so we keep a
+        # rental_id -> item_id lookup on the side for actions that need the item too.
         self._active_item_ids = {}
         self._pending_item_ids = {}
         self.refresh()
 
     def refresh(self):
+        """Reloads the pending and active rental tables from the database."""
         for row in self.pending_tree.get_children():
             self.pending_tree.delete(row)
         self._pending_item_ids = {}
@@ -263,9 +301,10 @@ class ClerkDashboard(ctk.CTkFrame):
         name = self.new_member_name_entry.get().strip()
         email = self.new_member_email_entry.get().strip()
         balance_text = self.new_member_balance_entry.get().strip()
+        password = self.new_member_password_entry.get()
 
-        if not name or not email:
-            self.status_label.configure(text="Name and email are required.", text_color="red")
+        if not name or not email or not password:
+            self.status_label.configure(text="Name, email, and password are required.", text_color="red")
             return
         try:
             balance = float(balance_text)
@@ -273,13 +312,29 @@ class ClerkDashboard(ctk.CTkFrame):
             self.status_label.configure(text="Starting balance must be a number.", text_color="red")
             return
 
-        success, message = add_member(name, email, balance, "Customer")
+        # Clerks can only register Customer accounts (no role field on this form).
+        success, message = add_member(name, email, balance, "Customer", password)
         self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.new_member_name_entry.delete(0, "end")
             self.new_member_email_entry.delete(0, "end")
             self.new_member_balance_entry.delete(0, "end")
             self.new_member_balance_entry.insert(0, "0")
+            self.new_member_password_entry.delete(0, "end")
+
+    def reset_password(self):
+        email = self.reset_password_email_entry.get().strip()
+        new_password = self.reset_password_entry.get()
+
+        if not email or not new_password:
+            self.status_label.configure(text="Email and new password are required.", text_color="red")
+            return
+
+        success, message = set_member_password(email, new_password)
+        self.status_label.configure(text=message, text_color="green" if success else "red")
+        if success:
+            self.reset_password_email_entry.delete(0, "end")
+            self.reset_password_entry.delete(0, "end")
 
     def approve_selected(self):
         selected = self.pending_tree.selection()
@@ -300,7 +355,7 @@ class ClerkDashboard(ctk.CTkFrame):
             return
 
         rental_id = int(selected[0])
-        item_id = self._pending_item_ids[selected[0]]
+        item_id = self._pending_item_ids[selected[0]]  # need item_id too, so the copy can be restocked
         success, message = deny_rental(rental_id, item_id)
         self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
@@ -321,6 +376,10 @@ class ClerkDashboard(ctk.CTkFrame):
 
 
 class AdminDashboard(ctk.CTkFrame):
+    """Admin-facing screen: everything a clerk can do plus catalog management
+    (adding inventory), registering members of any role, and a store-wide
+    view of all rentals/returns."""
+
     def __init__(self, parent, controller, user_data):
         super().__init__(parent)
         self.controller = controller
@@ -337,6 +396,7 @@ class AdminDashboard(ctk.CTkFrame):
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True)
 
+        # --- Add New Movie / Equipment form ---
         add_frame = create_section(body, "Add New Movie / Equipment")
 
         ctk.CTkLabel(add_frame, text="Title:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
@@ -355,6 +415,7 @@ class AdminDashboard(ctk.CTkFrame):
 
         ctk.CTkButton(add_frame, text="Add Item", command=self.add_item).grid(row=0, column=6, padx=10, pady=8)
 
+        # --- Register New Member form (admin version: includes a role picker) ---
         member_frame = create_section(body, "Register New Member")
 
         ctk.CTkLabel(member_frame, text="Name:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
@@ -375,8 +436,26 @@ class AdminDashboard(ctk.CTkFrame):
         self.new_member_role_combo.set("Customer")
         self.new_member_role_combo.grid(row=0, column=7, padx=5, pady=8)
 
-        ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=8, padx=10, pady=8)
+        ctk.CTkLabel(member_frame, text="Password:").grid(row=0, column=8, padx=5, pady=8, sticky="e")
+        self.new_member_password_entry = ctk.CTkEntry(member_frame, width=140, show="*", placeholder_text="Customers only")
+        self.new_member_password_entry.grid(row=0, column=9, padx=5, pady=8)
 
+        ctk.CTkButton(member_frame, text="Register Member", command=self.add_member).grid(row=0, column=10, padx=10, pady=8)
+
+        # --- Reset Customer Password form ---
+        password_frame = create_section(body, "Reset Customer Password")
+
+        ctk.CTkLabel(password_frame, text="Email:").grid(row=0, column=0, padx=5, pady=8, sticky="e")
+        self.reset_password_email_entry = ctk.CTkEntry(password_frame, width=200)
+        self.reset_password_email_entry.grid(row=0, column=1, padx=5, pady=8)
+
+        ctk.CTkLabel(password_frame, text="New Password:").grid(row=0, column=2, padx=5, pady=8, sticky="e")
+        self.reset_password_entry = ctk.CTkEntry(password_frame, width=140, show="*")
+        self.reset_password_entry.grid(row=0, column=3, padx=5, pady=8)
+
+        ctk.CTkButton(password_frame, text="Set Password", command=self.reset_password).grid(row=0, column=4, padx=10, pady=8)
+
+        # --- Read-only current inventory table ---
         inventory_frame = create_section(body, "Current Inventory", fill="both", expand=True)
         self.inventory_tree = ttk.Treeview(
             inventory_frame, columns=("title", "type", "available"), show="headings", height=5
@@ -386,6 +465,7 @@ class AdminDashboard(ctk.CTkFrame):
         self.inventory_tree.heading("available", text="Available Copies")
         self.inventory_tree.pack(fill="both", expand=True)
 
+        # --- Store-wide rentals/returns, with an approve action available here too ---
         overview_frame = create_section(body, "All Rentals & Returns", fill="both", expand=True)
         self.overview_tree = ttk.Treeview(
             overview_frame,
@@ -404,6 +484,7 @@ class AdminDashboard(ctk.CTkFrame):
         self.refresh()
 
     def refresh(self):
+        """Reloads the inventory and store-wide rentals tables from the database."""
         for row in self.inventory_tree.get_children():
             self.inventory_tree.delete(row)
         for item_id, title, item_type, available in get_available_inventory():
@@ -442,9 +523,15 @@ class AdminDashboard(ctk.CTkFrame):
         email = self.new_member_email_entry.get().strip()
         balance_text = self.new_member_balance_entry.get().strip()
         role = self.new_member_role_combo.get().strip()
+        password = self.new_member_password_entry.get()
 
         if not name or not email or not role:
             self.status_label.configure(text="Name, email, and role are required.", text_color="red")
+            return
+        # Clerk/Admin accounts use the fixed role password, so only Customer
+        # registrations need a password entered here.
+        if role == "Customer" and not password:
+            self.status_label.configure(text="Password is required for customer accounts.", text_color="red")
             return
         try:
             balance = float(balance_text)
@@ -452,7 +539,7 @@ class AdminDashboard(ctk.CTkFrame):
             self.status_label.configure(text="Balance must be a number.", text_color="red")
             return
 
-        success, message = add_member(name, email, balance, role)
+        success, message = add_member(name, email, balance, role, password)
         self.status_label.configure(text=message, text_color="green" if success else "red")
         if success:
             self.new_member_name_entry.delete(0, "end")
@@ -460,6 +547,21 @@ class AdminDashboard(ctk.CTkFrame):
             self.new_member_balance_entry.delete(0, "end")
             self.new_member_balance_entry.insert(0, "0")
             self.new_member_role_combo.set("Customer")
+            self.new_member_password_entry.delete(0, "end")
+
+    def reset_password(self):
+        email = self.reset_password_email_entry.get().strip()
+        new_password = self.reset_password_entry.get()
+
+        if not email or not new_password:
+            self.status_label.configure(text="Email and new password are required.", text_color="red")
+            return
+
+        success, message = set_member_password(email, new_password)
+        self.status_label.configure(text=message, text_color="green" if success else "red")
+        if success:
+            self.reset_password_email_entry.delete(0, "end")
+            self.reset_password_entry.delete(0, "end")
 
     def approve_selected(self):
         selected = self.overview_tree.selection()

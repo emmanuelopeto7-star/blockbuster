@@ -1,16 +1,21 @@
+import hashlib
 import sqlite3
 from contextlib import closing
 from datetime import date, timedelta
 
 DB_NAME = "blockbuster.db"
 
+# How long a customer gets to keep a rented item before it's considered late.
 RENTAL_PERIOD_DAYS = 7
 
+# Customers need at least this much cash on their account to rent anything.
 MIN_CASH_BALANCE = 100
+# Rental statuses that count as "currently out" / not yet resolved.
 ACTIVE_RENTAL_STATUSES = ("Pending", "Approved", "Late")
 
 
 def get_db_connection():
+    """Opens a fresh SQLite connection with foreign key enforcement turned on."""
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -27,21 +32,29 @@ def update_late_rentals():
         conn.commit()
 
 
+# Clerk and Admin accounts share one fixed password per role instead of a
+# per-account password, since they're staff logins rather than registered members.
 ROLE_PASSWORDS = {
     "Clerk": "Clerk6969",
     "Admin": "admin6767",
 }
 
 
+def hash_password(password):
+    """One-way hash for storing/comparing customer passwords (never store plaintext)."""
+    return hashlib.sha256((password or "").encode("utf-8")).hexdigest()
+
+
 def authenticate_user(email, password=None):
     """Looks up a member by email for login and returns their role-routing data.
 
-    Clerk and Admin roles additionally require their fixed role password.
+    Clerk and Admin roles use their fixed role password; Customers are
+    checked against the password set on their account at registration.
     """
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT member_number, name, email, cash_balance, role FROM users WHERE email = ?",
+            "SELECT member_number, name, email, cash_balance, role, password FROM users WHERE email = ?",
             (email,),
         )
         user = cursor.fetchone()
@@ -50,10 +63,15 @@ def authenticate_user(email, password=None):
 
         role = user[4]
         required_password = ROLE_PASSWORDS.get(role)
-        if required_password and password != required_password:
+        if required_password is not None:
+            # Staff account: compare against the fixed role password directly.
+            if password != required_password:
+                return False, "Incorrect password.", None
+        elif hash_password(password) != user[5]:
+            # Customer account: compare hashes against what's stored in the DB.
             return False, "Incorrect password.", None
 
-        return True, "Login successful.", user
+        return True, "Login successful.", user[:5]
 
 
 def get_available_inventory():
@@ -77,20 +95,47 @@ def add_inventory_item(title, item_type, copies):
         return True, f"Added '{title}' to inventory."
 
 
-def add_member(name, email, cash_balance=0.0, role="Customer"):
-    """Admin/Clerk operation: Registers a new member account."""
+def add_member(name, email, cash_balance=0.0, role="Customer", password=""):
+    """Admin/Clerk operation: Registers a new member account.
+
+    The password is only meaningful for Customer accounts; Clerk and Admin
+    accounts log in with their fixed role password regardless of what's stored.
+    """
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
         try:
             cursor.execute(
-                "INSERT INTO users (name, email, cash_balance, role) VALUES (?, ?, ?, ?)",
-                (name, email, cash_balance, role),
+                "INSERT INTO users (name, email, cash_balance, role, password) VALUES (?, ?, ?, ?, ?)",
+                (name, email, cash_balance, role, hash_password(password)),
             )
         except sqlite3.IntegrityError:
+            # email column is UNIQUE, so this fires when the address is already registered.
             return False, f"A member with email '{email}' already exists."
         conn.commit()
 
         return True, f"Member '{name}' registered successfully."
+
+
+def set_member_password(email, new_password):
+    """Clerk/Admin operation: Sets or resets a member's login password.
+
+    Only affects Customer logins; Clerk and Admin accounts always use
+    their fixed role password regardless of what's stored here.
+    """
+    if not new_password:
+        return False, "New password is required."
+
+    with closing(get_db_connection()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE users SET password = ? WHERE email = ?",
+            (hash_password(new_password), email),
+        )
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return False, f"No member found with email '{email}'."
+        return True, "Password updated successfully."
 
 
 def request_rental(member_number, item_id):
@@ -109,6 +154,8 @@ def request_rental(member_number, item_id):
         if item[0] <= 0:
             return False, "No copies available for this item."
 
+        # New rentals start as Pending until a clerk approves them, and the
+        # due date is locked in up front based on the standard rental period.
         due_date = date.today() + timedelta(days=RENTAL_PERIOD_DAYS)
         cursor.execute(
             "INSERT INTO rentals (item_id, member_number, due_date, status) VALUES (?, ?, ?, 'Pending')",
@@ -158,6 +205,8 @@ def check_rental_eligibility(member_number):
         if cash_balance < MIN_CASH_BALANCE:
             return False, f"Denied: Balance is {cash_balance}. Minimum {MIN_CASH_BALANCE} cash balance required."
 
+        # Count anything still Pending/Approved/Late - those are items the
+        # member hasn't settled yet, so they block new rental requests.
         cursor.execute(
             f"""
             SELECT COUNT(*) FROM rentals
@@ -201,6 +250,7 @@ def approve_rental(rental_id):
         conn.commit()
 
         if cursor.rowcount == 0:
+            # rowcount is 0 if the rental doesn't exist or already moved out of Pending.
             return False, "Rental not found or is not awaiting approval."
         return True, "Rental request approved successfully."
 
@@ -217,6 +267,8 @@ def deny_rental(rental_id, item_id):
             conn.commit()
             return False, "Rental not found or is not awaiting approval."
 
+        # The copy was reserved (decremented) when the request was made, so
+        # denying it has to give that copy back to inventory.
         cursor.execute(
             "UPDATE inventory SET available_copies = available_copies + 1 WHERE item_id = ?",
             (item_id,),
@@ -256,6 +308,7 @@ def process_return(rental_id, item_id):
             conn.commit()
             return False, "Rental not found."
 
+        # Returning the item frees up a copy for the next customer to rent.
         cursor.execute(
             "UPDATE inventory SET available_copies = available_copies + 1 WHERE item_id = ?",
             (item_id,),
