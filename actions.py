@@ -48,8 +48,6 @@ def hash_password(password):
 def authenticate_user(email, password=None):
     """Looks up a member by email for login and returns their role-routing data.
 
-    Clerk and Admin roles use their fixed role password; Customers are
-    checked against the password set on their account at registration.
     """
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
@@ -97,9 +95,6 @@ def add_inventory_item(title, item_type, copies):
 
 def add_member(name, email, cash_balance=0.0, role="Customer", password=""):
     """Admin/Clerk operation: Registers a new member account.
-
-    The password is only meaningful for Customer accounts; Clerk and Admin
-    accounts log in with their fixed role password regardless of what's stored.
     """
     with closing(get_db_connection()) as conn:
         cursor = conn.cursor()
@@ -109,7 +104,6 @@ def add_member(name, email, cash_balance=0.0, role="Customer", password=""):
                 (name, email, cash_balance, role, hash_password(password)),
             )
         except sqlite3.IntegrityError:
-            # email column is UNIQUE, so this fires when the address is already registered.
             return False, f"A member with email '{email}' already exists."
         conn.commit()
 
